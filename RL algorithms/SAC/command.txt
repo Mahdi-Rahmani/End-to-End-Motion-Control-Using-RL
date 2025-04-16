@@ -1,0 +1,3 @@
+python rgb_sac.py --episodes 100 --sync --pedestrians 0 --auto-alpha
+
+python test_sac.py --model-path ./checkpoints/final_model.pth --episodes 5 --sync --record --output-dir ./sac_evaluation
