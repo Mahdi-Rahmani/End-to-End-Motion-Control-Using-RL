@@ -59,7 +59,9 @@ Our results show that TSAC achieves the best performance, with superior stabilit
 │       ├── record_test
 │       ├── rgb_tsac.py
 │       └── test_tsac.py
-└── images
+├── images
+|
+└── requirements.txt
 ```
 
 ## Requirements
@@ -125,22 +127,22 @@ python rgb_tsac.py --sync --min-length 4 --max-length 8 --auto-alpha --hidden-di
 
 #### PPO
 ```bash
-python test_ppo.py --model-path ./checkpoints/final_model.pth --episodes 10 --sync --vehicles 0 --pedestrians 0 --record --output-dir ./test_results
+python test_ppo.py --model-path ./checkpoints/final_model.pth --episodes 50 --sync --record --output-dir ./test_results
 ```
 
 #### SAC
 ```bash
-python test_sac.py --model-path ./checkpoints/final_model.pth --episodes 5 --sync --record --output-dir ./sac_evaluation
+python test_sac.py --model-path ./checkpoints/final_model.pth --episodes 50 --sync --record --output-dir ./sac_evaluation
 ```
 
 #### TD3
 ```bash
-python test_td3.py --model-path ./checkpoints/td3_final_model.pth --episodes 5 --sync --record --output-dir ./td3_evaluation
+python test_td3.py --model-path ./checkpoints/td3_final_model.pth --episodes 50 --sync --record --output-dir ./td3_evaluation
 ```
 
 #### TSAC
 ```bash
-python tsac_test.py --model-path ./checkpoints/final_model.pth --episodes 5 --sync --vehicles 0 --pedestrians 0 --record --output-dir ./tsac_evaluation
+python tsac_test.py --model-path ./checkpoints/final_model.pth --episodes 50 --sync --record --output-dir ./tsac_evaluation
 ```
 
 ## Results
