@@ -159,6 +159,15 @@ Key findings:
 - PPO demonstrated reasonable performance but struggled with stability in complex scenarios
 - TD3 had the most difficulty with consistency and often resulted in erratic behavior
 
+We also tested the TSAC model in previously unseen environments to evaluate its generalization capabilities. The following examples show the model attempting to follow the blue line (waypoints) in random environments:
+
+| TSAC in Random Environment - Sample 1 | TSAC in Random Environment - Sample 2 |
+|:----:|:---:|
+| ![Sample 1](images/Random_Env_TSAC/sample1.gif) | ![Sample 2](images/Random_Env_TSAC/sample2.gif) |
+
+
+These tests show that the model successfully learned to follow the blue waypoint line. However, the model occasionally struggles with speed control in new environments, causing instability at high speeds and sometimes missing the target line. This suggests that while the approach generalizes well to the task of following waypoints, additional training with a wider variety of environments and speed conditions could further improve performance.
+
 ## Acknowledgments
 
 - This project modifies the [gym-carla](https://github.com/cjy1992/gym-carla) environment to make it compatible with CARLA 0.9.14
