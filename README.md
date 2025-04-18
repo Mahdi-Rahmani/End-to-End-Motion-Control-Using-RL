@@ -1,4 +1,4 @@
-# End-to-End Motion Planning Using Reinforcement Learning
+# End-to-End Motion Control Using RL
 
 This repository contains implementations of four state-of-the-art reinforcement learning algorithms (TD3, PPO, SAC, and TSAC) for autonomous vehicle motion planning in the CARLA simulator. The approach uses bird's eye view (BEV) costmaps as state representation for end-to-end learning from perception to control.
 
