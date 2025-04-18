@@ -1,0 +1,3 @@
+python rgb_td3.py --sync --episodes 100 --action-reg 0.01 --extreme-penalty 0.05 --rand-action-prob 0.15
+
+python test_td3.py --model-path ./checkpoints/td3_final_model.pth --episodes 5 --sync --record --output-dir ./td3_evaluation
