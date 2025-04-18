@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2019: Jianyu Chen (jianyuchen@berkeley.edu)
-# Copyright (c) 2025: Updated for CARLA 0.9.14
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)vUpdated for CARLA 0.9.14
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
@@ -30,7 +30,7 @@ def controller_start_random_location(controller, world):
     loc = world.get_random_location_from_navigation()
     if loc is not None:
         controller.go_to_location(loc)
-    controller.set_max_speed(1 + random.random())  # Speed between 1 and 2
+    controller.set_max_speed(1 + random.random()) 
 
 class CarlaEnv(gym.Env):
   """An OpenAI gym wrapper for CARLA simulator."""
@@ -49,11 +49,11 @@ class CarlaEnv(gym.Env):
     self._jaywalkers = []
     self._jaywalker_update_counters = {}
 
-    # Add new parameters for termination configuration
+    # Add parameters for termination configuration
     self.terminate_on_lane_departure = params.get('terminate_on_lane_departure', False)
     self.lane_departure_factor = params.get('lane_departure_factor', 1.0)
 
-    self.display_size = params['display_size']  # rendering screen size
+    self.display_size = params['display_size'] 
     self.max_past_step = params['max_past_step']
     self.number_of_vehicles = params['number_of_vehicles']
     self.number_of_walkers = params['number_of_walkers']
@@ -72,8 +72,7 @@ class CarlaEnv(gym.Env):
     
     # Added parameters for CARLA 0.9.14
     self.metadata = {
-      'render_modes': ['human'],
-      'render.modes': ['human']
+      'render_modes': ['human']
     }
     self.host = params.get('host', 'localhost')
     self.port = params.get('port', 3000)
@@ -95,7 +94,7 @@ class CarlaEnv(gym.Env):
 
     # action and observation spaces
     self.discrete = params['discrete']
-    self.discrete_act = [params['discrete_acc'], params['discrete_steer']] # acc, steer
+    self.discrete_act = [params['discrete_acc'], params['discrete_steer']] 
     self.n_acc = len(self.discrete_act[0])
     self.n_steer = len(self.discrete_act[1])
     if self.discrete:
@@ -103,12 +102,11 @@ class CarlaEnv(gym.Env):
     else:
       self.action_space = spaces.Box(np.array([params['continuous_accel_range'][0], 
       params['continuous_steer_range'][0]]), np.array([params['continuous_accel_range'][1],
-      params['continuous_steer_range'][1]]), dtype=np.float32)  # acc, steer
+      params['continuous_steer_range'][1]]), dtype=np.float32)  
     observation_space_dict = {
       'camera': spaces.Box(low=0, high=255, shape=(self.obs_size, self.obs_size, 3), dtype=np.uint8),
       'lidar': spaces.Box(low=0, high=255, shape=(self.obs_size, self.obs_size, 3), dtype=np.uint8),
       'birdeye': spaces.Box(low=0, high=255, shape=(self.obs_size, self.obs_size, 3), dtype=np.uint8),
-      # Extend the ranges to ensure they can hold all possible values
       'state': spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
     }
     if self.pixor:
@@ -151,8 +149,8 @@ class CarlaEnv(gym.Env):
     self.ego_bp = self._create_vehicle_bluepprint(params['ego_vehicle_filter'], color='49,8,8')
 
     # Collision sensor
-    self.collision_hist = [] # The collision history
-    self.collision_hist_l = 1 # collision history length
+    self.collision_hist = [] 
+    self.collision_hist_l = 1 
     self.collision_bp = self.world.get_blueprint_library().find('sensor.other.collision')
 
     # Lidar sensor
@@ -171,10 +169,12 @@ class CarlaEnv(gym.Env):
     self.camera_img = np.zeros((self.obs_size, self.obs_size, 3), dtype=np.uint8)
     self.camera_trans = carla.Transform(carla.Location(x=0.8, z=1.7))
     self.camera_bp = self.world.get_blueprint_library().find('sensor.camera.rgb')
+
     # Modify the attributes of the blueprint to set image resolution and field of view.
     self.camera_bp.set_attribute('image_size_x', str(self.obs_size))
     self.camera_bp.set_attribute('image_size_y', str(self.obs_size))
     self.camera_bp.set_attribute('fov', '110')
+
     # Set the time in seconds between sensor captures
     self.camera_bp.set_attribute('sensor_tick', '0.02')
 
@@ -244,12 +244,10 @@ class CarlaEnv(gym.Env):
       if self.task_mode == 'random':
         transform = random.choice(self.vehicle_spawn_points)
       elif self.task_mode == 'roundabout':
-        #self.start = [52.1+np.random.uniform(-5,5), -4.2, 178.66] # random
+        # self.start = [52.1+np.random.uniform(-5,5), -4.2, 178.66] 
         # self.start=[52.1,-4.2, 178.66] # static
         transform = carla.Transform(carla.Location(x=98.93, y=-6.89, z=5), carla.Rotation(yaw=-179.14))
-        
-        #transform = set_carla_transform(self.start)
-      
+              
       if self._try_spawn_ego_vehicle_at(transform):
         break
       else:
@@ -304,44 +302,6 @@ class CarlaEnv(gym.Env):
     info = {}
     return obs, info
 
-    # Add collision sensor
-    self.collision_sensor = self.world.spawn_actor(self.collision_bp, carla.Transform(), attach_to=self.ego)
-    self.collision_sensor.listen(lambda event: self._on_collision(event))
-    self.sensor_list.append(self.collision_sensor)
-    
-    # Add lidar sensor
-    self.lidar_sensor = self.world.spawn_actor(self.lidar_bp, self.lidar_trans, attach_to=self.ego)
-    self.lidar_sensor.listen(lambda data: self._on_lidar_data(data))
-    self.sensor_list.append(self.lidar_sensor)
-
-    # Add camera sensor
-    self.camera_sensor = self.world.spawn_actor(self.camera_bp, self.camera_trans, attach_to=self.ego)
-    self.camera_sensor.listen(lambda data: self._on_camera_img(data))
-    self.sensor_list.append(self.camera_sensor)
-
-    # Update timesteps
-    self.time_step = 0
-    self.reset_step += 1
-
-    # Enable sync mode
-    self.settings.synchronous_mode = self.sync_mode
-    self.world.apply_settings(self.settings)
-
-    # Set up route planner
-    self.routeplanner = RoutePlanner(self.ego, self.max_waypt)
-    self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()
-
-    # Set ego information for render
-    if self.rendering:
-      self.birdeye_render.set_hero(self.ego, self.ego.id)
-
-    # Tick once to ensure all sensors data are available
-    if self.sync_mode:
-      self.world.tick()
-    else:
-      time.sleep(0.1)
-      
-    return self._get_obs()
   
   def step(self, action):
     """Execute one step of the environment.
@@ -449,7 +409,8 @@ class CarlaEnv(gym.Env):
         if not self.sync_mode:
             self._get_obs()
         pygame.display.flip()
-        time.sleep(0.01)  # Small delay to keep the UI responsive
+        # Small delay to keep the UI responsive
+        time.sleep(0.01)  
  
 
   def _spawn_surrounding_vehicles(self):
@@ -676,7 +637,6 @@ class CarlaEnv(gym.Env):
     """Set destination for jaywalker to cross roads"""
     # Only proceed if we have an ego vehicle
     if not hasattr(self, 'ego') or not self.ego:
-        # Fallback to random destination
         loc = self.world.get_random_location_from_navigation()
         if loc:
             controller.go_to_location(loc)
@@ -693,7 +653,8 @@ class CarlaEnv(gym.Env):
         speed_scalar = math.sqrt(ego_speed.x**2 + ego_speed.y**2)
         
         # Calculate distance ahead based on ego speed (greater distance for higher speeds)
-        distance_ahead = max(15, min(30, speed_scalar * 5))  # Between 15 and 30 meters
+        # Between 15 and 30 meters
+        distance_ahead = max(15, min(30, speed_scalar * 5))  
         
         # Calculate point ahead of vehicle
         point_ahead = ego_location + forward_vector * distance_ahead
@@ -713,7 +674,6 @@ class CarlaEnv(gym.Env):
             start_point = point_ahead - right_vector * crossing_distance
             end_point = point_ahead + right_vector * crossing_distance
         
-        # Current walker location
         walker_location = walker.get_location()
         
         # If walker is far from crossing start point, send to start first
@@ -816,7 +776,8 @@ class CarlaEnv(gym.Env):
     # Schedule the next update after a random delay
     # In a real implementation, you would use a proper scheduler or the CARLA callback system
     # For this example, we're using a simple approach based on simulation steps
-    self._jaywalker_update_counter = random.randint(50, 200)  # Update after 5-20 seconds assuming 10 Hz
+    # Update after 5-20 seconds assuming 10 Hz
+    self._jaywalker_update_counter = random.randint(50, 200)  
     
   def _update_jaywalkers(self):
     """Update jaywalker behavior during simulation steps"""
@@ -844,7 +805,7 @@ class CarlaEnv(gym.Env):
                 
             # Initialize or update counter
             if i not in self._jaywalker_update_counters:
-                self._jaywalker_update_counters[i] = random.randint(30, 100)  # Update more frequently
+                self._jaywalker_update_counters[i] = random.randint(30, 100) 
             else:
                 self._jaywalker_update_counters[i] -= 1
             
@@ -1201,51 +1162,6 @@ class CarlaEnv(gym.Env):
     
     return r
 
-    '''
-    # Reward for speed tracking
-    r_speed = -abs(speed - self.desired_speed)
-    
-    # Collision penalty (most severe)
-    r_collision = 0
-    if len(self.collision_hist) > 0:
-        r_collision = -100  # Very large negative reward
-
-    # Reward for steering (penalize excessive steering)
-    r_steer = -self.ego.get_control().steer**2
-
-    # Lane departure penalty (moderate severity)
-    dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
-    r_out = 0
-    if abs(dis) > self.out_lane_thres:
-        r_out = -10  # Moderate negative reward
-    
-    # Calculate longitudinal speed (speed along the lane direction)
-    lspeed = np.array([v.x, v.y])
-    lspeed_lon = np.dot(lspeed, w)
-
-    # Penalty for excessive speed
-    r_fast = 0
-    if lspeed_lon > self.desired_speed:
-        r_fast = -1
-    
-    # Penalty for lateral acceleration (discourage hard turns at high speed)
-    r_lat = -abs(self.ego.get_control().steer) * lspeed_lon**2
-    
-    # Destination reached bonus (large positive reward)
-    r_destination = 0
-    if self.dests is not None:
-        for dest in self.dests:
-            if np.sqrt((ego_x-dest[0])**2+(ego_y-dest[1])**2) < 4:
-                r_destination = 100  # Large positive reward
-                break
-    
-    # Combine all reward components
-    r = r_collision + r_destination + 1*lspeed_lon + 10*r_fast + r_out*10 + r_steer*5 + 0.2*r_lat - 0.1
-    
-    # Add speed bonus to encourage movement
-    speed_bonus = min(speed / 5.0, 1.0)  # Bonus for speed up to 5 m/s
-    '''
-    return r + speed_bonus
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""
