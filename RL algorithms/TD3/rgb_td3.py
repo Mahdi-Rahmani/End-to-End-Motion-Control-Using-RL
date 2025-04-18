@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
+
 # Training code for TD3 agent in CARLA environment
 # This code uses the RGB birdeye view as state input
 import os
@@ -24,11 +26,9 @@ import traceback
 import sys
 import matplotlib.pyplot as plt
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='localhost', type=str, help='CARLA server host')
@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument('--recovery-timeout', default=5, type=int, help='Time to wait after an error before retrying')
     parser.add_argument('--pedestrians', default=5, type=int, help='Number of pedestrians for jaywalking')
     
-    # TD3 specific parameters (updated defaults)
+    # TD3 specific parameters 
     parser.add_argument('--policy-delay', default=3, type=int, help='Policy update frequency (TD3 delay parameter)')
     parser.add_argument('--batch-size', default=128, type=int, help='Batch size for training')
     parser.add_argument('--lr', default=3e-4, type=float, help='Learning rate for critic')
@@ -60,13 +60,11 @@ def parse_args():
     parser.add_argument('--rand-action-prob', default=0.15, type=float, help='Probability of random action')
     return parser.parse_args()
 
-# CNN feature extractor with improved initialization
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
-        self.input_shape = input_shape  # (3, 84, 84) for RGB
+        self.input_shape = input_shape  
         
-        # Simple CNN architecture
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
@@ -95,7 +93,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.norm3(self.conv3(x)))
         return x.view(-1, self.feature_size)
 
-# Actor network (Policy) with improved action scaling and activation
 class Actor(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256, max_action=1.0):
         super(Actor, self).__init__()
@@ -106,17 +103,16 @@ class Actor(nn.Module):
         
         # Actor network layers with dropouts for regularization
         self.fc1 = nn.Linear(feature_size, hidden_dim)
-        self.drop1 = nn.Dropout(0.2)  # Increased dropout
+        self.drop1 = nn.Dropout(0.2)  
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.drop2 = nn.Dropout(0.2)  # Increased dropout
+        self.drop2 = nn.Dropout(0.2)  
         self.fc3 = nn.Linear(hidden_dim, action_dim)
         
         self.max_action = max_action
         
-        # Better initialization for improved stability
         nn.init.orthogonal_(self.fc1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.fc2.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.fc3.weight, gain=0.01)  # Small weights at output layer
+        nn.init.orthogonal_(self.fc3.weight, gain=0.01) 
         nn.init.constant_(self.fc3.bias, 0)
     
     def forward(self, x):
@@ -133,7 +129,6 @@ class Actor(nn.Module):
         
         return actions
 
-# Critic network (Twin Q-networks) with improved architecture
 class Critic(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256):
         super(Critic, self).__init__()
@@ -144,16 +139,16 @@ class Critic(nn.Module):
         
         # First critic network (Q1)
         self.q1_fc1 = nn.Linear(feature_size + action_dim, hidden_dim)
-        self.q1_drop1 = nn.Dropout(0.2)  # Increased dropout
+        self.q1_drop1 = nn.Dropout(0.2)  
         self.q1_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.q1_drop2 = nn.Dropout(0.2)  # Increased dropout
+        self.q1_drop2 = nn.Dropout(0.2)  
         self.q1_out = nn.Linear(hidden_dim, 1)
         
         # Second critic network (Q2)
         self.q2_fc1 = nn.Linear(feature_size + action_dim, hidden_dim)
-        self.q2_drop1 = nn.Dropout(0.2)  # Increased dropout
+        self.q2_drop1 = nn.Dropout(0.2)  
         self.q2_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.q2_drop2 = nn.Dropout(0.2)  # Increased dropout
+        self.q2_drop2 = nn.Dropout(0.2)  
         self.q2_out = nn.Linear(hidden_dim, 1)
         
         # Better initialization
@@ -193,7 +188,6 @@ class Critic(nn.Module):
         q1 = self.q1_out(x1)
         return q1
 
-# Replay buffer with importance sampling
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -203,7 +197,7 @@ class ReplayBuffer:
     
     def add(self, state, action, reward, next_state, done):
         self.buffer.append((state, action, reward, next_state, done))
-        self.priorities.append(self.default_priority)  # New transitions get default priority
+        self.priorities.append(self.default_priority)  
     
     def sample(self, batch_size, beta=0.4):
         # If not enough samples, return random ones
@@ -232,21 +226,20 @@ class ReplayBuffer:
         # Update the priorities for these indices
         for idx, priority in zip(indices, priorities):
             if idx < len(self.priorities):
-                self.priorities[idx] = priority + 1e-5  # Add small constant to avoid zero priority
+                self.priorities[idx] = priority + 1e-5  
     
     def __len__(self):
         return len(self.buffer)
 
-# TD3 Agent with improvements to prevent action saturation
 class TD3Agent:
     def __init__(self, state_shape, action_dim, args):
         self.state_shape = state_shape
         self.action_dim = action_dim
         self.args = args
         self.max_action = 1.0
-        self.action_reg = args.action_reg  # Action regularization coefficient
-        self.extreme_penalty = args.extreme_penalty  # Penalty for extreme actions
-        self.rand_action_prob = args.rand_action_prob  # Probability of random action
+        self.action_reg = args.action_reg  
+        self.extreme_penalty = args.extreme_penalty  
+        self.rand_action_prob = args.rand_action_prob  
         
         # Initialize networks
         self.actor = Actor(state_shape, action_dim, max_action=self.max_action).to(device)
@@ -278,8 +271,7 @@ class TD3Agent:
         self.updates = 0
         
         # Action scaling (for environment interaction)
-        # MODIFIED: Reduced max acceleration from 3.0 to 2.0
-        self.action_high = torch.tensor([2.0, 0.6]).to(device)  # [acceleration, steering]
+        self.action_high = torch.tensor([2.0, 0.6]).to(device)  
         self.action_low = torch.tensor([-0.5, -0.6]).to(device)
         self.action_range = self.action_high - self.action_low
         
@@ -287,7 +279,6 @@ class TD3Agent:
         self.actor_scheduler = optim.lr_scheduler.StepLR(self.actor_optimizer, step_size=100000, gamma=0.5)
         self.critic_scheduler = optim.lr_scheduler.StepLR(self.critic_optimizer, step_size=100000, gamma=0.5)
         
-        # Enable evaluation mode for actor initially to make sure dropout doesn't affect exploration
         self.actor.eval()
         self.critic.eval()
         
@@ -304,10 +295,10 @@ class TD3Agent:
             # Pure exploration with uniform random but biased toward reasonable actions
             if random.random() < 0.7:  # 70% bias toward forward movement
                 # Generate acceleration biased toward positive (forward)
-                accel = random.uniform(-0.3, 1.0)  # Bias toward forward
+                accel = random.uniform(-0.3, 1.0)  
                 # Generate steering biased toward center
-                steer = random.normalvariate(0, 0.3)  # Normal distribution around 0
-                steer = max(-0.6, min(0.6, steer))  # Clip to valid range
+                steer = random.normalvariate(0, 0.3)  
+                steer = max(-0.6, min(0.6, steer))  
                 raw_action = np.array([accel, steer])
             else:
                 # Complete random uniform
@@ -328,10 +319,10 @@ class TD3Agent:
             
             # Scale noise based on progress
             progress = min(1.0, self.total_steps / 200000)
-            noise_scale = self.exploration_noise * (1.0 - 0.5 * progress)  # Decay noise over time
+            noise_scale = self.exploration_noise * (1.0 - 0.5 * progress)  
             
             # Apply noise with probabilistic mixing
-            if random.random() < 0.8:  # 80% chance to add noise
+            if random.random() < 0.8:  
                 action = (action + noise * noise_scale).clip(-self.max_action, self.max_action)
         
         # Scale action from [-1,1] to actual environment ranges
@@ -342,18 +333,18 @@ class TD3Agent:
         
         # Apply a bias toward smoother steering when going straight
         if abs(action_scaled[1]) < 0.15 and random.random() < 0.4:
-            action_scaled[1] *= 0.5  # Reduce small steering adjustments
+            action_scaled[1] *= 0.5  
             
         # Sometimes reduce extreme acceleration
         if action_scaled[0] > 1.7 and random.random() < 0.3:
-            action_scaled[0] *= 0.8  # Reduce high acceleration occasionally
+            action_scaled[0] *= 0.8  
         
         return action_scaled
     
     def update(self, batch_size=128):
         """Update the networks using TD3 algorithm with improved stability"""
         if len(self.memory) < batch_size:
-            return 0, 0  # Not enough samples for an update
+            return 0, 0  
         
         self.total_steps += 1
         
@@ -366,17 +357,16 @@ class TD3Agent:
         
         # Update critic
         with torch.no_grad():
-            # Select next actions with target policy (DDPG step)
             next_actions = self.actor_target(next_states)
             
-            # Add clipped noise for target policy smoothing (TD3 step)
+            # Add clipped noise for target policy smoothing 
             noise = (torch.randn_like(next_actions) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
             next_actions = (next_actions + noise).clamp(-self.max_action, self.max_action)
             
             # Get target Q values using the twin critics
             target_q1, target_q2 = self.critic_target(next_states, next_actions)
             
-            # Take minimum to reduce overestimation bias (TD3 step)
+            # Take minimum to reduce overestimation bias
             target_q = torch.min(target_q1, target_q2)
             
             # Compute the target value with discount
@@ -396,10 +386,11 @@ class TD3Agent:
         # Optimize critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)  # Gradient clipping for stability
+        # Gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)  
         self.critic_optimizer.step()
         
-        # Delayed policy updates (TD3 step)
+        # Delayed policy updates
         actor_loss = torch.tensor(0.0)
         if self.total_steps % self.policy_delay == 0:
             self.updates += 1
@@ -421,7 +412,7 @@ class TD3Agent:
             # Optimize actor
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 0.5)  # Tighter clipping for actor
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 0.5)  
             self.actor_optimizer.step()
             
             # Update target networks with soft update (Polyak averaging)
@@ -474,7 +465,6 @@ class TD3Agent:
         self.total_steps = checkpoint['total_steps']
         self.updates = checkpoint.get('updates', 0)
         
-        # Ensure models are in eval mode after loading
         self.actor.eval()
         self.critic.eval()
 
@@ -507,8 +497,8 @@ def preprocess_birdeye(birdeye):
     resized = cv2.resize(birdeye, (84, 84))
     # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose for PyTorch (channel-first format)
-    transposed = np.transpose(normalized, (2, 0, 1))  # Shape: (3, 84, 84)
+    # Transpose for PyTorch 
+    transposed = np.transpose(normalized, (2, 0, 1))  
     return transposed
 
 # Exponential moving average tracker for rewards (for smoother visualization)
@@ -569,7 +559,7 @@ def train_single_episode(env, agent, writer, episode, args, reward_history, ema_
         
         # Store transition in replay buffer (scaled to [-1, 1] for network)
         normalized_action = 2.0 * (action - agent.action_low.cpu().numpy()) / agent.action_range.cpu().numpy() - 1.0
-        normalized_action = np.clip(normalized_action, -1.0, 1.0)  # Ensure it's within bounds
+        normalized_action = np.clip(normalized_action, -1.0, 1.0)  
         
         agent.memory.add(state, normalized_action, reward, next_state, float(done))
         
@@ -694,18 +684,17 @@ def main():
                     env = None
                     time.sleep(args.recovery_timeout)
                 
-                # Environment parameters with curriculum 
+                # Environment parameters 
                 params = {
-                    # Gradual curriculum learning
-                    'number_of_vehicles': 0,  # Gradually introduce traffic
+                    'number_of_vehicles': 0,  
                     'number_of_walkers': 0,
                     'display_size': 256,
                     'max_past_step': 1,
                     'dt': 0.1,
                     'discrete': False,
-                    'discrete_acc': [-0.5, 0.0, 2.0],  # Updated for max of 2.0
+                    'discrete_acc': [-0.5, 0.0, 2.0],  
                     'discrete_steer': [-0.6, 0.0, 0.6],
-                    'continuous_accel_range': [-0.5, 2.0],  # Updated for max of 2.0
+                    'continuous_accel_range': [-0.5, 2.0],  
                     'continuous_steer_range': [-0.6, 0.6],
                     'ego_vehicle_filter': 'vehicle.lincoln.*',
                     'port': args.port,
@@ -718,18 +707,16 @@ def main():
                     'obs_range': 32,
                     'lidar_bin': 0.125,
                     'd_behind': 12,
-                    # More forgiving thresholds early on
                     'out_lane_thres': max(10.0, min(25.0, 25.0 - (500 - min(episode, 500)) * 0.02)),
-                    'desired_speed': min(3.0 + episode * 0.01, 8.0),  # Start slow, gradually increase
+                    'desired_speed': min(3.0 + episode * 0.01, 8.0),  
                     'max_ego_spawn_times': 200,
                     'display_route': True,
                     'pixor_size': 64,
                     'pixor': False,
                     'sync': args.sync,
                     'rendering': not args.no_rendering,
-                    'jaywalking_pedestrians': episode > 100,  # Introduce jaywalkers later
-                    'terminate_on_lane_departure': episode > 100,  # Only terminate for lane departure after some learning
-                    # Set waypoint threshold high at first, then gradually reduce it
+                    'jaywalking_pedestrians': episode > 100, 
+                    'terminate_on_lane_departure': episode > 100,  
                     'waypoint_distance_threshold': max(5.0, 15.0 - episode * 0.02)
                 }
                 
@@ -738,8 +725,8 @@ def main():
                 env = gym.make('carla-v0', params=params)
                 
                 # State and action dimensions
-                state_shape = (3, 84, 84)  # RGB image (C, H, W)
-                action_dim = 2  # [throttle/brake, steering]
+                state_shape = (3, 84, 84)  
+                action_dim = 2  
                 
                 # Create or load agent
                 if episode == 0 or agent is None:

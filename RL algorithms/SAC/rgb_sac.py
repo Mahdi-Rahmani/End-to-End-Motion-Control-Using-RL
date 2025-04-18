@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
 # Training code for SAC agent in CARLA environment
 # This code uses the RGB birdeye view as state input
 import os
@@ -25,11 +26,9 @@ import traceback
 import sys
 import matplotlib.pyplot as plt
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='localhost', type=str, help='CARLA server host')
@@ -53,18 +52,15 @@ def parse_args():
     parser.add_argument('--buffer-size', default=100000, type=int, help='Replay buffer size')
     return parser.parse_args()
 
-# CNN feature extractor (same for both actor and critic)
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
         self.input_shape = input_shape  # (3, 84, 84) for RGB
         
-        # CNN layers
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
         
-        # Calculate the size of the CNN output
         def conv2d_size_out(size, kernel_size=3, stride=1):
             return (size - (kernel_size - 1) - 1) // stride + 1
         
@@ -78,7 +74,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.conv3(x))
         return x.view(-1, self.feature_size)
 
-# Actor network - Outputs mean and log_std for Gaussian policy
 class PolicyNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256, log_std_min=-20, log_std_max=2):
         super(PolicyNetwork, self).__init__()
@@ -114,7 +109,7 @@ class PolicyNetwork(nn.Module):
         normal = Normal(mean, std)
         
         # Sample action from normal distribution
-        x_t = normal.rsample()  # Reparameterization trick
+        x_t = normal.rsample() 
         
         # Squash to [-1, 1]
         y_t = torch.tanh(x_t)
@@ -129,7 +124,6 @@ class PolicyNetwork(nn.Module):
         
         return y_t, log_prob, mean
 
-# Q-network (Critic)
 class QNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256):
         super(QNetwork, self).__init__()
@@ -174,7 +168,6 @@ class QNetwork(nn.Module):
         
         return q1
 
-# Replay buffer for SAC
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -199,7 +192,6 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-# SAC Agent
 class SACAgent:
     def __init__(self, state_shape, action_dim, args):
         self.state_shape = state_shape
@@ -265,7 +257,7 @@ class SACAgent:
     
     def update(self):
         if len(self.memory) < self.batch_size:
-            return 0, 0, 0  # Not enough samples
+            return 0, 0, 0  
         
         # Sample batch
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
@@ -379,8 +371,8 @@ def preprocess_birdeye(birdeye):
     resized = cv2.resize(birdeye, (84, 84))
     # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
-    transposed = np.transpose(normalized, (2, 0, 1))  # Shape will be (3, 84, 84)
+    # Transpose to get channels first 
+    transposed = np.transpose(normalized, (2, 0, 1)) 
     return transposed
 
 # Train a single episode
@@ -473,8 +465,8 @@ def main():
     
     # Parameters for the gym_carla environment
     params = {
-        'number_of_vehicles': 0,  # Reduced for training
-        'number_of_walkers': args.pedestrians,  # Add pedestrians for jaywalking
+        'number_of_vehicles': 0,  
+        'number_of_walkers': args.pedestrians,  
         'display_size': 256,
         'max_past_step': 1,
         'dt': 0.1,
@@ -502,7 +494,7 @@ def main():
         'pixor': False,
         'sync': args.sync,
         'rendering': not args.no_rendering,
-        'jaywalking_pedestrians': True  # Enable jaywalking behavior
+        'jaywalking_pedestrians': True  
     }
     
     # Create the gym environment
@@ -533,8 +525,8 @@ def main():
                 env = gym.make('carla-v0', params=params)
                 
                 # Define state shape and action space
-                state_shape = (3, 84, 84)  # RGB channels for PyTorch (channels, height, width)
-                action_dim = 2  # [throttle/brake, steering]
+                state_shape = (3, 84, 84)  
+                action_dim = 2  
                 
                 # Create agent (or load existing one)
                 if episode == 0 or agent is None:

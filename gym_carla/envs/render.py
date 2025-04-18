@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2019: Jianyu Chen (jianyuchen@berkeley.edu).
-# Copyright (c) 2025: Updated for CARLA 0.9.14
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca) Updated for CARLA 0.9.14
 #
 # This file is modified from <https://github.com/carla-simulator/carla>:
 # Copyright (c) 2018 Intel Labs.

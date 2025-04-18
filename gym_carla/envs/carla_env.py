@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2019: Jianyu Chen (jianyuchen@berkeley.edu)
-# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)vUpdated for CARLA 0.9.14
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca) Updated for CARLA 0.9.14
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
 # Training code for PPO agent in CARLA environment with RGB birdeye view
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -56,17 +56,14 @@ def parse_args():
     
     return parser.parse_args()
 
-# Simpler CNN feature extractor
 class SimpleCNN(nn.Module):
     def __init__(self, input_shape):
         super(SimpleCNN, self).__init__()
         self.input_shape = input_shape  # (3, 84, 84) for RGB
         
-        # Simpler CNN with fewer filters
         self.conv1 = nn.Conv2d(input_shape[0], 16, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
         
-        # Calculate the output size
         def conv2d_size_out(size, kernel_size, stride):
             return (size - (kernel_size - 1) - 1) // stride + 1
         
@@ -79,7 +76,6 @@ class SimpleCNN(nn.Module):
         x = F.relu(self.conv2(x))
         return x.view(-1, self.feature_size)
 
-# Simpler Actor Network 
 class ActorNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=64):
         super(ActorNetwork, self).__init__()
@@ -95,7 +91,7 @@ class ActorNetwork(nn.Module):
         # Fixed log_std as learnable parameters
         self.log_std = nn.Parameter(torch.zeros(action_dim) - 0.5)  # Initialize slightly lower
         
-        # Better initialization
+        # initialization
         nn.init.orthogonal_(self.fc.weight, gain=1.0)
         nn.init.orthogonal_(self.mean.weight, gain=0.01)
         nn.init.constant_(self.mean.bias, 0)
@@ -105,11 +101,12 @@ class ActorNetwork(nn.Module):
         x = F.relu(self.fc(x))
         
         # Get mean of action distribution
-        action_mean = torch.tanh(self.mean(x))  # Tanh to bound means between -1 and 1
+        # Tanh to bound means between -1 and 1
+        action_mean = torch.tanh(self.mean(x))  
         
         # Use parameter for log_std instead of network output
         log_std = self.log_std.expand(action_mean.size(0), -1)
-        log_std = torch.clamp(log_std, -2.0, 0.0)  # More limited range for better stability
+        log_std = torch.clamp(log_std, -2.0, 0.0) 
         
         return action_mean, log_std
     
@@ -117,7 +114,6 @@ class ActorNetwork(nn.Module):
         action_mean, log_std = self.forward(state)
         
         if deterministic:
-            # For evaluation, just return the mean action
             return action_mean, None
         
         # Create normal distribution
@@ -125,11 +121,11 @@ class ActorNetwork(nn.Module):
         normal = Normal(action_mean, std)
         
         # Sample action from the distribution
-        x_t = normal.rsample()  # Reparameterization trick
+        x_t = normal.rsample() 
         
-        # Calculate log probability
+        # Calculate log probability and prevent extreme log probs
         log_prob = normal.log_prob(x_t)
-        log_prob = torch.clamp(log_prob, -10, 2)  # Prevent extreme log probs
+        log_prob = torch.clamp(log_prob, -10, 2)  
         log_prob = log_prob.sum(dim=-1, keepdim=True)
         
         # Clip actions to be between -1 and 1
@@ -146,7 +142,7 @@ class ActorNetwork(nn.Module):
         
         # Compute log probability of the action with stability clipping
         log_prob = normal.log_prob(action)
-        log_prob = torch.clamp(log_prob, -10, 2)  # Prevent extreme log probs
+        log_prob = torch.clamp(log_prob, -10, 2)  
         log_prob = log_prob.sum(dim=-1, keepdim=True)
         
         # Compute entropy of the action distribution
@@ -154,7 +150,6 @@ class ActorNetwork(nn.Module):
         
         return log_prob, entropy
 
-# Simpler Critic Network
 class CriticNetwork(nn.Module):
     def __init__(self, input_shape, hidden_dim=64):
         super(CriticNetwork, self).__init__()
@@ -167,7 +162,7 @@ class CriticNetwork(nn.Module):
         self.fc = nn.Linear(feature_size, hidden_dim)
         self.value = nn.Linear(hidden_dim, 1)
         
-        # Better initialization
+        # initialization
         nn.init.orthogonal_(self.fc.weight, gain=1.0)
         nn.init.orthogonal_(self.value.weight, gain=1.0)
         nn.init.constant_(self.value.bias, 0)
@@ -178,7 +173,6 @@ class CriticNetwork(nn.Module):
         value = self.value(x)
         return value
 
-# Better reward normalizer with running statistics
 class RewardNormalizer:
     def __init__(self, epsilon=1e-8):
         self.mean = 0
@@ -189,7 +183,7 @@ class RewardNormalizer:
 
     def update(self, reward):
         self.returns.append(reward)
-        if len(self.returns) > 100:  # Keep last 100 returns for normalization
+        if len(self.returns) > 100:  
             self.returns.pop(0)
         
         if len(self.returns) > 1:
@@ -200,12 +194,11 @@ class RewardNormalizer:
         self.update(reward)
         return (reward - self.mean) / (self.std + self.epsilon)
 
-# Rollout buffer for storing trajectories
 class RolloutBuffer:
     def __init__(self, capacity, observation_shape, action_dim):
         self.capacity = capacity
         
-        # Initialize buffers for states, actions, rewards, etc.
+        # Initialize buffers for states, actions, rewards
         self.observations = torch.zeros((capacity, *observation_shape), dtype=torch.float32).to(device)
         self.actions = torch.zeros((capacity, action_dim), dtype=torch.float32).to(device)
         self.rewards = torch.zeros((capacity, 1), dtype=torch.float32).to(device)
@@ -278,7 +271,6 @@ class RolloutBuffer:
         self.ptr = 0
         self.size = 0
 
-# Improved PPO Agent
 class PPOAgent:
     def __init__(self, state_shape, action_dim, args):
         self.state_shape = state_shape
@@ -337,10 +329,10 @@ class PPOAgent:
         # During early training or with probability based on exploration factor, explore in a structured way
         if not evaluate and (self.step_count < 5000 or random.random() < exploration_factor):
             # Generate structured exploration actions
-            if random.random() < 0.7:  # 70% go forward with small steering
+            if random.random() < 0.7:            # 70% go forward with small steering
                 action_scaled = np.array([
-                    random.uniform(-0.5, 3.0),  # Acceleration between 1-2.5
-                    random.uniform(-0.6, 0.6)  # Small steering
+                    random.uniform(-0.5, 3.0),  
+                    random.uniform(-0.6, 0.6)    
                 ])
             else:  # 30% moderate steering with moderate acceleration
                 action_scaled = np.array([
@@ -357,7 +349,6 @@ class PPOAgent:
             action = 2 * (action_scaled - self.action_low.cpu().numpy()) / self.action_range.cpu().numpy() - 1
             
             # For exploration actions, we don't need accurate log_probs or values
-            # Just create dummy values for buffer storage
             with torch.no_grad():
                 state_tensor = torch.tensor(np.array([state]), dtype=torch.float32).to(device)
                 value = self.critic(state_tensor).cpu().numpy()[0]
@@ -371,14 +362,11 @@ class PPOAgent:
             # Get action and log probability
             action, action_log_prob = self.actor.get_action(state_tensor, deterministic=evaluate)
             
-            # Print action details for debugging
             if self.step_count % 100 == 0:
                 print(f"Debug - Raw action: {action.cpu().numpy()[0]}")
                 
-            # Get value estimate
             value = self.critic(state_tensor)
         
-        # Store action for debugging
         if action_log_prob is not None:
             self.debug_actions.append(action.cpu().numpy()[0])
             
@@ -548,8 +536,8 @@ def preprocess_birdeye(birdeye):
     resized = cv2.resize(birdeye, (84, 84))
     # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
-    transposed = np.transpose(normalized, (2, 0, 1))  # Shape will be (3, 84, 84)
+    # Transpose to get channels first (PyTorch format) (Shape will be (3, 84, 84))
+    transposed = np.transpose(normalized, (2, 0, 1))  
     return transposed
 
 # Train a single episode
@@ -758,14 +746,14 @@ def main():
                     'lidar_bin': 0.125,
                     'd_behind': 12,
                     'out_lane_thres': max(5.0, min(15.0, 15.0 - (300 - episode) * 0.05)) if episode < 300 else 15.0,  # Gradually increase tolerance
-                    'desired_speed': min(4.0 + episode * 0.02, 8.0),  # Gradually increase target speed
+                    'desired_speed': min(4.0 + episode * 0.02, 8.0),                                                  # Gradually increase target speed
                     'max_ego_spawn_times': 200,
                     'display_route': True,
                     'pixor_size': 64,
                     'pixor': False,
                     'sync': args.sync,
                     'rendering': not args.no_rendering,
-                    'jaywalking_pedestrians': episode > 200,  # Introduce jaywalkers later
+                    'jaywalking_pedestrians': episode > 200,       # Introduce jaywalkers later
                     'terminate_on_lane_departure': episode > 150,  # Only terminate for lane departure after some learning
                 }
                 
@@ -774,8 +762,8 @@ def main():
                 env = gym.make('carla-v0', params=params)
                 
                 # State and action dimensions
-                state_shape = (3, 84, 84)  # RGB image (C, H, W)
-                action_dim = 2  # [throttle/brake, steering]
+                state_shape = (3, 84, 84)  
+                action_dim = 2  
                 
                 # Create or load agent
                 if episode == 0 or agent is None:

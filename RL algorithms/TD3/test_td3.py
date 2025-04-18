@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
+
 # Testing code for saved TD3 agent in CARLA environment
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -21,11 +23,9 @@ import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser(description='Test a trained TD3 model in CARLA environment')
     parser.add_argument('--model-path', type=str, required=True, help='Path to the saved model checkpoint')
@@ -43,13 +43,11 @@ def parse_args():
     
     return parser.parse_args()
 
-# CNN feature extractor with improved initialization
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
-        self.input_shape = input_shape  # (3, 84, 84) for RGB
+        self.input_shape = input_shape  
         
-        # Simple CNN architecture
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
@@ -59,7 +57,6 @@ class CNNFeatureExtractor(nn.Module):
         self.norm2 = nn.LayerNorm([64, 9, 9])
         self.norm3 = nn.LayerNorm([64, 7, 7])
         
-        # Calculate feature size
         def conv2d_size_out(size, kernel_size=3, stride=1):
             return (size - (kernel_size - 1) - 1) // stride + 1
         
@@ -73,7 +70,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.norm3(self.conv3(x)))
         return x.view(-1, self.feature_size)
 
-# Actor network (Policy) with improved action scaling and activation
 class Actor(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256, max_action=1.0):
         super(Actor, self).__init__()
@@ -102,7 +98,6 @@ class Actor(nn.Module):
         
         return actions
 
-# Critic network (Twin Q-networks)
 class Critic(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256):
         super(Critic, self).__init__()
@@ -151,7 +146,6 @@ class Critic(nn.Module):
         q1 = self.q1_out(x1)
         return q1
 
-# TD3 Test Agent
 class TD3TestAgent:
     def __init__(self, state_shape, action_dim, hidden_dim=256):
         self.state_shape = state_shape
@@ -164,12 +158,11 @@ class TD3TestAgent:
         # Initialize critic network (optional for testing)
         self.critic = Critic(state_shape, action_dim, hidden_dim).to(device)
         
-        # Action scaling (for environment interaction)
-        self.action_high = torch.tensor([2.0, 0.6], device=device)  # [acceleration, steering]
+        # Action scaling
+        self.action_high = torch.tensor([2.0, 0.6], device=device)  
         self.action_low = torch.tensor([-0.5, -0.6], device=device)
         self.action_range = self.action_high - self.action_low
         
-        # Set networks to evaluation mode
         self.actor.eval()
         self.critic.eval()
     
@@ -214,7 +207,6 @@ class TD3TestAgent:
         
         return action_scaled
 
-# Video recorder class
 class VideoRecorder:
     def __init__(self, output_dir, episode_num):
         os.makedirs(output_dir, exist_ok=True)
@@ -249,11 +241,8 @@ class VideoRecorder:
 
 # Preprocess birdeye view
 def preprocess_birdeye(birdeye):
-    # Resize to network input size
     resized = cv2.resize(birdeye, (84, 84))
-    # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
     transposed = np.transpose(normalized, (2, 0, 1))
     return transposed
 
@@ -301,7 +290,7 @@ def test_episode(env, agent, episode_num, args):
     
     # Episode loop
     start_time = time.time()
-    while not done and step < 1000:  # Max 1000 steps per episode
+    while not done and step < 1000:  
         step_start = time.time()
         
         # Select action deterministically for evaluation
@@ -324,13 +313,12 @@ def test_episode(env, agent, episode_num, args):
         # Get vehicle speed in km/h
         if hasattr(env, 'ego'):
             v = env.ego.get_velocity()
-            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  # Convert to km/h
+            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  
         else:
             speed = 0
         
         # Record frame if requested
         if recorder:
-            # Add telemetry overlay to frame
             display_img = add_telemetry(
                 next_obs['birdeye'],
                 speed,
@@ -361,7 +349,6 @@ def test_episode(env, agent, episode_num, args):
         # Render
         env.render()
     
-    # Save video if recorded
     if recorder:
         recorder.save()
     
@@ -385,13 +372,13 @@ def test_episode(env, agent, episode_num, args):
     
     # Additional metrics
     success = False
-    if step >= 1000:  # Reached max steps without crashing
+    if step >= 1000:  
         success = True
         print(f"Episode completed successfully (reached max steps)")
     else:
         print(f"Episode terminated early (collision or lane departure)")
     
-    # Action smoothness metric (lower is better)
+    # Action smoothness metric 
     if len(steering_angles) > 1:
         steering_smoothness = np.mean(np.abs(np.diff(steering_angles)))
         accel_smoothness = np.mean(np.abs(np.diff(accelerations)))
@@ -454,9 +441,9 @@ def main():
         'max_past_step': 1,
         'dt': 0.1,
         'discrete': False,
-        'discrete_acc': [-0.5, 0.0, 2.0],  # Max of 2.0 for TD3
+        'discrete_acc': [-0.5, 0.0, 2.0],  
         'discrete_steer': [-0.6, 0.0, 0.6],
-        'continuous_accel_range': [-0.5, 2.0],  # Max of 2.0 for TD3
+        'continuous_accel_range': [-0.5, 2.0], 
         'continuous_steer_range': [-0.6, 0.6],
         'ego_vehicle_filter': 'vehicle.lincoln.*',
         'port': args.port,
@@ -487,8 +474,8 @@ def main():
     env = None
     try:
         # Initialize state dimensions
-        state_shape = (3, 84, 84)  # RGB image (C, H, W)
-        action_dim = 2  # [throttle/brake, steering]
+        state_shape = (3, 84, 84)  
+        action_dim = 2 
         
         # Create agent and load model
         agent = TD3TestAgent(state_shape, action_dim, hidden_dim=256)
@@ -500,7 +487,7 @@ def main():
                 # Create new environment for each episode
                 if env is not None:
                     env.close()
-                    time.sleep(3)  # Give CARLA time to clean up
+                    time.sleep(3)  
                 
                 print(f"\nCreating environment for test episode {episode+1}/{args.episodes}...")
                 env = gym.make('carla-v0', params=params)
@@ -587,7 +574,6 @@ def main():
             plt.ylabel('Steering Smoothness')
             plt.title('Steering Smoothness (lower is better)')
             
-            # Plot action excess (how often actions are at extremes)
             plt.subplot(2, 3, 6)
             plt.bar(range(len(results_df)), results_df['action_excess'])
             plt.xlabel('Episode')

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
+
 # Testing code for saved T-SAC agent in CARLA environment
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -22,11 +24,9 @@ import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser(description='Test a trained T-SAC model in CARLA environment')
     parser.add_argument('--model-path', type=str, required=True, help='Path to the saved model checkpoint')
@@ -46,11 +46,10 @@ def parse_args():
     
     return parser.parse_args()
 
-# CNN feature extractor
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
-        self.input_shape = input_shape  # (3, 84, 84) for RGB
+        self.input_shape = input_shape  
         
         # CNN layers
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
@@ -71,7 +70,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.conv3(x))
         return x.view(-1, self.feature_size)
 
-# Policy Network with enhanced design from the paper
 class TSACPolicyNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=128, log_std_min=-20, log_std_max=2):
         super(TSACPolicyNetwork, self).__init__()
@@ -90,7 +88,7 @@ class TSACPolicyNetwork(nn.Module):
         self.mean_out = nn.Linear(hidden_dim, action_dim)
         
         # Variance network with layer normalization and mean input
-        self.var_fc1 = nn.Linear(feature_size + action_dim, hidden_dim)  # +action_dim for mean input
+        self.var_fc1 = nn.Linear(feature_size + action_dim, hidden_dim) 
         self.var_ln1 = nn.LayerNorm(hidden_dim)
         self.var_fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.var_ln2 = nn.LayerNorm(hidden_dim)
@@ -120,7 +118,7 @@ class TSACPolicyNetwork(nn.Module):
         normal = Normal(mean, std)
         
         # Sample action from normal distribution
-        x_t = normal.rsample()  # Reparameterization trick
+        x_t = normal.rsample()  
         
         # Squash to [-1, 1]
         y_t = torch.tanh(x_t)
@@ -134,7 +132,6 @@ class TSACPolicyNetwork(nn.Module):
         
         return y_t, log_prob, mean
 
-# Positional Encoding for Transformer
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=100):
         super(PositionalEncoding, self).__init__()
@@ -150,7 +147,6 @@ class PositionalEncoding(nn.Module):
         seq_len = x.size(1)
         return x + self.pe[start_idx:start_idx+seq_len].unsqueeze(0)
 
-# Transformer-based Critic Network 
 class TransformerCritic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128, max_seq_len=8):
         super(TransformerCritic, self).__init__()
@@ -166,7 +162,6 @@ class TransformerCritic(nn.Module):
         # Positional encoding
         self.pos_encoder = PositionalEncoding(hidden_dim, max_seq_len)
         
-        # Simplified transformer
         self.transformer_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=2,
@@ -248,7 +243,7 @@ class TSACTestAgent:
         ).to(device)
         
         # For scaling our continuous actions
-        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  # [acc_range, steer_range]
+        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  
         self.action_bias = torch.tensor([1.5, 0.0], device=device)
     
     def load(self, path):
@@ -288,7 +283,6 @@ class TSACTestAgent:
         
         return scaled_action.cpu().numpy()[0]
 
-# Video recorder class
 class VideoRecorder:
     def __init__(self, output_dir, episode_num):
         os.makedirs(output_dir, exist_ok=True)
@@ -317,21 +311,16 @@ class VideoRecorder:
         for frame in self.frames:
             out.write(frame)
         
-        # Release video writer
         out.release()
         print(f"Video saved to {self.output_file}")
 
 # Preprocess birdeye view
 def preprocess_birdeye(birdeye):
-    # Resize to network input size
     resized = cv2.resize(birdeye, (84, 84))
-    # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
     transposed = np.transpose(normalized, (2, 0, 1))
     return transposed
 
-# Add telemetry overlay to frame
 def add_telemetry(frame, speed, acceleration, steering, reward, step):
     # Create a copy to avoid modifying original
     display = frame.copy()
@@ -341,14 +330,13 @@ def add_telemetry(frame, speed, acceleration, steering, reward, step):
     cv2.putText(display, f"Speed: {speed:.1f} km/h", (10, 30), font, 0.7, (255, 255, 255), 2)
     cv2.putText(display, f"Accel: {acceleration:.2f}", (10, 60), font, 0.7, (255, 255, 255), 2)
     cv2.putText(display, f"Steer: {steering:.2f}", (10, 90), font, 0.7, (255, 255, 255), 2)
-    cv2.putText(display, f"Reward: {reward*2+1:.2f}", (10, 120), font, 0.7, (255, 255, 255), 2)
+    cv2.putText(display, f"Reward: {reward:.2f}", (10, 120), font, 0.7, (255, 255, 255), 2)
     cv2.putText(display, f"Step: {step}", (10, 150), font, 0.7, (255, 255, 255), 2)
     
     return display
 
 # Test function for a single episode
 def test_episode(env, agent, episode_num, args):
-    # Initialize recorder if needed
     recorder = None
     if args.record:
         recorder = VideoRecorder(os.path.join(args.output_dir, 'videos'), episode_num)
@@ -372,7 +360,7 @@ def test_episode(env, agent, episode_num, args):
     rewards = []
     
     # Episode loop
-    while not done and step < 1000:  # Max 1000 steps per episode
+    while not done and step < 1000:  
         # Select action deterministically for evaluation
         action_scaled = agent.select_action(state, deterministic=True)
         
@@ -390,13 +378,12 @@ def test_episode(env, agent, episode_num, args):
         # Get vehicle speed in km/h
         if hasattr(env, 'ego'):
             v = env.ego.get_velocity()
-            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  # Convert to km/h
+            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  
         else:
             speed = 0
         
         # Record frame if requested
         if recorder:
-            # Add telemetry overlay to frame
             display_img = add_telemetry(
                 next_obs['birdeye'],
                 speed,
@@ -444,7 +431,7 @@ def test_episode(env, agent, episode_num, args):
         print(f"Episode terminated early (collision or lane departure)")
         lanekeeping_rate = 0.0
     
-    # Action smoothness metric (lower is better)
+    # Action smoothness metric
     if len(steering_angles) > 1:
         steering_smoothness = np.mean(np.abs(np.diff(steering_angles)))
     else:
@@ -516,8 +503,8 @@ def main():
     env = None
     try:
         # Initialize state dimensions
-        state_shape = (3, 84, 84)  # RGB image (C, H, W)
-        action_dim = 2  # [throttle/brake, steering]
+        state_shape = (3, 84, 84)  
+        action_dim = 2  
         
         # Create agent and load model
         agent = TSACTestAgent(
@@ -534,7 +521,7 @@ def main():
                 # Create new environment for each episode
                 if env is not None:
                     env.close()
-                    time.sleep(3)  # Give CARLA time to clean up
+                    time.sleep(3)  
                 
                 print(f"\nCreating environment for test episode {episode+1}/{args.episodes}...")
                 env = gym.make('carla-v0', params=params)

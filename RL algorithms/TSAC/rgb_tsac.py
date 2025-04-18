@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
+
 # Improved T-SAC implementation following the paper more closely
 # This code uses the RGB birdeye view as state input with a Transformer-based critic
 import os
@@ -25,11 +27,9 @@ import traceback
 import sys
 import matplotlib.pyplot as plt
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='localhost', type=str, help='CARLA server host')
@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument('--recovery-timeout', default=5, type=int, help='Time to wait after an error before retrying')
     parser.add_argument('--pedestrians', default=5, type=int, help='Number of pedestrians for jaywalking')
     
-    # T-SAC specific parameters - tuned to match paper
+    # T-SAC specific parameters
     parser.add_argument('--batch-size', default=32, type=int, help='Batch size for training')
     parser.add_argument('--policy-lr', default=3e-4, type=float, help='Policy learning rate')
     parser.add_argument('--critic-lr', default=1e-4, type=float, help='Critic learning rate')
@@ -62,18 +62,15 @@ def parse_args():
     
     return parser.parse_args()
 
-# CNN feature extractor
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
-        self.input_shape = input_shape  # (3, 84, 84) for RGB
+        self.input_shape = input_shape  
         
-        # CNN layers - simplified
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
         
-        # Calculate the size of the CNN output
         def conv2d_size_out(size, kernel_size=3, stride=1):
             return (size - (kernel_size - 1) - 1) // stride + 1
         
@@ -87,7 +84,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.conv3(x))
         return x.view(-1, self.feature_size)
 
-# Policy Network with enhanced design from the paper
 class TSACPolicyNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=128, log_std_min=-20, log_std_max=2):
         super(TSACPolicyNetwork, self).__init__()
@@ -106,7 +102,7 @@ class TSACPolicyNetwork(nn.Module):
         self.mean_out = nn.Linear(hidden_dim, action_dim)
         
         # Variance network with layer normalization and mean input
-        self.var_fc1 = nn.Linear(feature_size + action_dim, hidden_dim)  # +action_dim for mean input
+        self.var_fc1 = nn.Linear(feature_size + action_dim, hidden_dim)  
         self.var_ln1 = nn.LayerNorm(hidden_dim)
         self.var_fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.var_ln2 = nn.LayerNorm(hidden_dim)
@@ -124,7 +120,7 @@ class TSACPolicyNetwork(nn.Module):
         mean_x = F.leaky_relu(self.mean_ln2(self.mean_fc2(mean_x)))
         mean = self.mean_out(mean_x)
         
-        # Variance network (with mean input) - key detail from the paper
+        # Variance network (with mean input) 
         # Detach mean to prevent backprop through variance affecting mean
         var_input = torch.cat([features, mean.detach()], dim=1)
         var_x = F.leaky_relu(self.var_ln1(self.var_fc1(var_input)))
@@ -140,7 +136,7 @@ class TSACPolicyNetwork(nn.Module):
         normal = Normal(mean, std)
         
         # Sample action from normal distribution
-        x_t = normal.rsample()  # Reparameterization trick
+        x_t = normal.rsample()  
         
         # Squash to [-1, 1]
         y_t = torch.tanh(x_t)
@@ -170,7 +166,6 @@ class PositionalEncoding(nn.Module):
         seq_len = x.size(1)
         return x + self.pe[start_idx:start_idx+seq_len].unsqueeze(0)
 
-# Simplified Transformer-based Critic Network following the paper
 class TransformerCritic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128, max_seq_len=16):
         super(TransformerCritic, self).__init__()
@@ -186,11 +181,11 @@ class TransformerCritic(nn.Module):
         # Positional encoding
         self.pos_encoder = PositionalEncoding(hidden_dim, max_seq_len)
         
-        # Simplified transformer with 2 heads, 1 layer - as per our discussion
+        # transformer with 2 heads, 1 layer 
         self.transformer_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
-            nhead=2,  # Reduced to 2 heads
-            dim_feedforward=hidden_dim*2,  # Simplified
+            nhead=2,  
+            dim_feedforward=hidden_dim*2, 
             dropout=0.1,
             activation='gelu',
             batch_first=True
@@ -198,7 +193,7 @@ class TransformerCritic(nn.Module):
         
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer, 
-            num_layers=1  # Reduced to 1 layer for simplicity
+            num_layers=1 
         )
         
         # Output heads for different sequence lengths - key paper concept
@@ -236,7 +231,7 @@ class TransformerCritic(nn.Module):
         transformer_output = self.transformer_encoder(combined, mask=mask)
         
         # Get Q-values for each subsequence length
-        # This is the key insight from the paper - predict values for each subsequence
+        # This is the key part from the paper - predict values for each subsequence
         q_values = []
         for i in range(min(seq_len, len(self.q_outputs))):
             q_i = self.q_outputs[i](transformer_output[:, i])
@@ -244,7 +239,6 @@ class TransformerCritic(nn.Module):
         
         return q_values
 
-# Trajectory Replay Buffer
 class TrajectoryReplayBuffer:
     def __init__(self, capacity, max_episode_length=1000):
         self.capacity = capacity
@@ -294,7 +288,7 @@ class TrajectoryReplayBuffer:
             sequence = episode[start_idx:start_idx + seq_length]
             states, actions, rewards, next_states, dones = zip(*sequence)
             
-            batch_states.append(states[0])  # Initial state
+            batch_states.append(states[0]) 
             batch_actions.append(actions)
             batch_rewards.append(rewards)
             batch_next_states.append(next_states)
@@ -345,7 +339,6 @@ class TrajectoryReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-# T-SAC Agent
 class TSACAgent:
     def __init__(self, state_shape, action_dim, args):
         self.state_shape = state_shape
@@ -434,7 +427,7 @@ class TSACAgent:
         self.current_episode = []
         
         # For scaling our continuous actions
-        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  # [acc_range, steer_range]
+        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  
         self.action_bias = torch.tensor([1.5, 0.0], device=device)
     
     def select_action(self, state, evaluate=False):
@@ -720,12 +713,9 @@ class TSACAgent:
 
 # Preprocess the birdeye view observation
 def preprocess_birdeye(birdeye):
-    # Resize to a smaller size
     resized = cv2.resize(birdeye, (84, 84))
-    # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
-    transposed = np.transpose(normalized, (2, 0, 1))  # Shape will be (3, 84, 84)
+    transposed = np.transpose(normalized, (2, 0, 1)) 
     return transposed
 
 # Train a single episode
@@ -826,7 +816,7 @@ def main():
     
     # Parameters for the gym_carla environment
     params = {
-        'number_of_vehicles': 0,  # Reduced for training
+        'number_of_vehicles': 0,  
         'number_of_walkers': 0,  
         'display_size': 256,
         'max_past_step': 1,
@@ -865,7 +855,7 @@ def main():
         print("Creating CARLA environment...")
         sys.stdout.flush()
         
-        # Main training loop - recreate environment for each episode
+        # Main training loop 
         for episode in range(args.episodes):
             try:
                 print(f"\n--- Starting episode {episode+1}/{args.episodes} ---")
@@ -879,15 +869,15 @@ def main():
                     except Exception as e:
                         print(f"Error closing environment: {e}")
                     env = None
-                    time.sleep(args.recovery_timeout)  # Wait for CARLA to stabilize
+                    time.sleep(args.recovery_timeout)  
                 
                 print(f"Creating new environment for episode {episode+1}...")
                 sys.stdout.flush()
                 env = gym.make('carla-v0', params=params)
                 
                 # Define state shape and action space
-                state_shape = (3, 84, 84)  # RGB channels for PyTorch (channels, height, width)
-                action_dim = 2  # [throttle/brake, steering]
+                state_shape = (3, 84, 84)  
+                action_dim = 2  
                 
                 # Create agent (or load existing one)
                 if episode == 0 or agent is None:
@@ -901,7 +891,6 @@ def main():
                 print(f"Running episode {episode+1}...")
                 sys.stdout.flush()
                 
-                # Run a single episode with better error handling
                 try:
                     train_single_episode(env, agent, writer, episode, args, reward_history)
                 except RuntimeError as e:

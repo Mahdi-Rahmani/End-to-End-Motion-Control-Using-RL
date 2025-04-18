@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
 
 # Testing code for saved PPO agent in CARLA environment
 import os
@@ -44,7 +45,6 @@ def parse_args():
     
     return parser.parse_args()
 
-# Simple CNN for feature extraction
 class SimpleCNN(nn.Module):
     def __init__(self, input_shape):
         super(SimpleCNN, self).__init__()
@@ -100,7 +100,6 @@ class ActorNetwork(nn.Module):
         action_mean, log_std = self.forward(state)
         
         if deterministic:
-            # For evaluation, just return the mean action
             return action_mean, None
         
         # Create normal distribution
@@ -115,7 +114,6 @@ class ActorNetwork(nn.Module):
         
         return action, None
 
-# Critic Network
 class CriticNetwork(nn.Module):
     def __init__(self, input_shape, hidden_dim=64):
         super(CriticNetwork, self).__init__()
@@ -134,7 +132,6 @@ class CriticNetwork(nn.Module):
         value = self.value(x)
         return value
 
-# PPO Agent for testing
 class PPOAgent:
     def __init__(self, state_shape, action_dim):
         self.state_shape = state_shape
@@ -144,7 +141,7 @@ class PPOAgent:
         self.actor = ActorNetwork(state_shape, action_dim).to(device)
         self.critic = CriticNetwork(state_shape).to(device)
         
-        # Action space limits (-0.5 to 3.0 for acceleration)
+        # Action space limits
         self.action_high = torch.tensor([3.0, 0.6]).to(device)
         self.action_low = torch.tensor([-0.5, -0.6]).to(device)
         self.action_range = self.action_high - self.action_low
@@ -175,7 +172,6 @@ class PPOAgent:
         
         return action_scaled, value.cpu().numpy()[0]
 
-# Video recorder class
 class VideoRecorder:
     def __init__(self, output_dir, episode_num):
         os.makedirs(output_dir, exist_ok=True)
@@ -259,7 +255,7 @@ def test_episode(env, agent, episode_num, args):
     rewards = []
     
     # Episode loop
-    while not done and step < 1000:  # Max 1000 steps per episode
+    while not done and step < 1000:  
         # Select action deterministically
         action_scaled, _ = agent.select_action(state)
         
@@ -277,7 +273,7 @@ def test_episode(env, agent, episode_num, args):
         # Get vehicle speed in km/h
         if hasattr(env, 'ego'):
             v = env.ego.get_velocity()
-            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  # Convert to km/h
+            speed = 3.6 * np.sqrt(v.x**2 + v.y**2)  
         else:
             speed = 0
         
@@ -405,7 +401,8 @@ def main():
                 # Create new environment for each episode
                 if env is not None:
                     env.close()
-                    time.sleep(3)  # Give CARLA time to clean up
+                    # Give CARLA time to clean up
+                    time.sleep(3)  
                 
                 print(f"\nCreating environment for test episode {episode+1}/{args.episodes}...")
                 env = gym.make('carla-v0', params=params)

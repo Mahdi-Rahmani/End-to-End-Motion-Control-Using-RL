@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2025: Mahdi Rahmani (mahdi.rahmani@uwaterloo.ca)
 # Testing code for saved SAC agent in CARLA environment
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -23,11 +24,9 @@ import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parse arguments
 def parse_args():
     parser = argparse.ArgumentParser(description='Test a trained SAC model in CARLA environment')
     parser.add_argument('--model-path', type=str, required=True, help='Path to the saved model checkpoint')
@@ -45,11 +44,10 @@ def parse_args():
     
     return parser.parse_args()
 
-# CNN feature extractor
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, input_shape):
         super(CNNFeatureExtractor, self).__init__()
-        self.input_shape = input_shape  # (3, 84, 84) for RGB
+        self.input_shape = input_shape 
         
         # CNN layers
         self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
@@ -70,7 +68,6 @@ class CNNFeatureExtractor(nn.Module):
         x = F.relu(self.conv3(x))
         return x.view(-1, self.feature_size)
 
-# Actor network - Outputs mean and log_std for Gaussian policy
 class PolicyNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256, log_std_min=-20, log_std_max=2):
         super(PolicyNetwork, self).__init__()
@@ -106,7 +103,7 @@ class PolicyNetwork(nn.Module):
         normal = Normal(mean, std)
         
         # Sample action from normal distribution
-        x_t = normal.rsample()  # Reparameterization trick
+        x_t = normal.rsample()  
         
         # Squash to [-1, 1]
         y_t = torch.tanh(x_t)
@@ -120,7 +117,6 @@ class PolicyNetwork(nn.Module):
         
         return y_t, log_prob, mean
 
-# Q-network (Critic)
 class QNetwork(nn.Module):
     def __init__(self, input_shape, action_dim, hidden_dim=256):
         super(QNetwork, self).__init__()
@@ -165,7 +161,6 @@ class QNetwork(nn.Module):
         
         return q1
 
-# SAC Test Agent
 class SACTestAgent:
     def __init__(self, state_shape, action_dim, hidden_dim=256):
         self.state_shape = state_shape
@@ -176,8 +171,8 @@ class SACTestAgent:
         self.q_net = QNetwork(state_shape, action_dim, hidden_dim).to(device)
         
         # For scaling our continuous actions
-        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  # [acc_range, steer_range]
-        self.action_bias = torch.tensor([1.5, 0.0], device=device)     # No bias initially
+        self.action_scaling = torch.tensor([2.0, 0.6], device=device)  
+        self.action_bias = torch.tensor([1.5, 0.0], device=device)     
     
     def load(self, path):
         checkpoint = torch.load(path, map_location=device)
@@ -189,7 +184,8 @@ class SACTestAgent:
         else:
             print("Warning: Policy network not found in checkpoint")
         
-        # Load critic network (optional for testing, since we only use the policy during evaluation)
+        # Load critic network 
+        # optional for testing, since we only use the policy during evaluation
         if 'q_net' in checkpoint:
             self.q_net.load_state_dict(checkpoint['q_net'])
             print("Q network loaded successfully")
@@ -216,7 +212,6 @@ class SACTestAgent:
         
         return scaled_action.cpu().numpy()[0]
 
-# Video recorder class
 class VideoRecorder:
     def __init__(self, output_dir, episode_num):
         os.makedirs(output_dir, exist_ok=True)
@@ -249,13 +244,9 @@ class VideoRecorder:
         out.release()
         print(f"Video saved to {self.output_file}")
 
-# Preprocess birdeye view
 def preprocess_birdeye(birdeye):
-    # Resize to network input size
     resized = cv2.resize(birdeye, (84, 84))
-    # Normalize pixel values
     normalized = resized / 255.0
-    # Transpose to get channels first (PyTorch format)
     transposed = np.transpose(normalized, (2, 0, 1))
     return transposed
 
@@ -302,7 +293,7 @@ def test_episode(env, agent, episode_num, args):
     
     # Episode loop
     start_time = time.time()
-    while not done and step < 1000:  # Max 1000 steps per episode
+    while not done and step < 1000: 
         step_start = time.time()
         
         # Select action deterministically for evaluation
